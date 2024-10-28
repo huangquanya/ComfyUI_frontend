@@ -1,9 +1,19 @@
-// @ts-strict-ignore
+// 导入日志记录模块，用于记录系统运行时信息
 import { ComfyLogging } from './logging'
+
+// 导入组件构造器相关模块，用于创建和管理UI组件
 import { ComfyWidgetConstructor, ComfyWidgets, initWidgets } from './widgets'
+
+// 导入UI模块，用于构建和管理用户界面
 import { ComfyUI, $el } from './ui'
+
+// 导入API模块，用于处理与后端的通信
 import { api } from './api'
+
+// 导入默认图形模块，用于提供系统默认的工作流图形
 import { defaultGraph } from './defaultGraph'
+
+// 导入元数据处理模块，用于处理不同格式文件的元数据信息
 import {
   getPngMetadata,
   getWebpMetadata,
@@ -11,56 +21,107 @@ import {
   importA1111,
   getLatentMetadata
 } from './pnginfo'
+
+// 导入DOM裁剪设置模块，用于在DOM元素中添加裁剪功能
 import { addDomClippingSetting } from './domWidget'
+
+// 导入图片托管和网格计算模块，用于处理图片预览和布局
 import { createImageHost, calculateImageGrid } from './ui/imagePreview'
+
+// 导入可拖拽列表模块，用于创建可拖动排序的列表
 import { DraggableList } from './ui/draggableList'
+
+// 导入文本替换和样式表添加工具模块
 import { applyTextReplacements, addStylesheet } from './utils'
+
+// 导入Extension类型，用于定义Comfy扩展的结构
 import type { ComfyExtension } from '@/types/comfy'
+
+// 导入工作流JSON类型和节点ID类型，用于处理工作流的JSON表示和节点ID
 import {
   type ComfyWorkflowJSON,
   type NodeId,
   validateComfyWorkflow
 } from '../types/comfyWorkflow'
+
+// 导入API类型，用于定义API的结构
 import { ComfyNodeDef, StatusWsMessageStatus } from '@/types/apiTypes'
+
+// 导入颜色调整工具和颜色调整选项类型
 import { adjustColor, ColorAdjustOptions } from '@/utils/colorUtil'
+
+// 导入应用菜单模块，用于创建和管理应用的菜单
 import { ComfyAppMenu } from './ui/menu/index'
+
+// 导入存储值获取工具，用于从存储中获取值
 import { getStorageValue } from './utils'
+
+// 导入工作流管理器和工作流类型，用于创建和管理Comfy工作流
 import { ComfyWorkflowManager, ComfyWorkflow } from './workflows'
+
+// 导入LiteGraph相关模块，用于图形化编程
 import {
   LGraphCanvas,
   LGraph,
   LGraphNode,
   LiteGraph
 } from '@comfyorg/litegraph'
+
+// 导入存储位置类型，用于定义存储位置
 import { StorageLocation } from '@/types/settingTypes'
+
+// 导入扩展管理器类型，用于定义扩展管理器的结构
 import { ExtensionManager } from '@/types/extensionTypes'
+
+// 导入节点定义实现和系统节点定义，以及节点定义存储的钩子
 import {
   ComfyNodeDefImpl,
   SYSTEM_NODE_DEFS,
   useNodeDefStore
 } from '@/stores/nodeDefStore'
+
+// 导入输入插槽和向量2类型，用于定义节点的输入插槽和二维向量
 import { INodeInputSlot, Vector2 } from '@comfyorg/litegraph'
+
+// 导入lodash模块，用于提供实用的函数
 import _ from 'lodash'
+
+// 导入对话框服务模块，用于显示执行错误、工作流加载警告和模型缺失警告
 import {
   showExecutionErrorDialog,
   showLoadWorkflowWarning,
   showMissingModelsWarning
 } from '@/services/dialogService'
+
+// 导入设置存储、Toast存储、模型存储和工作空间存储的钩子
 import { useSettingStore } from '@/stores/settingStore'
 import { useToastStore } from '@/stores/toastStore'
 import { useModelStore } from '@/stores/modelStore'
-import type { ToastMessageOptions } from 'primevue/toast'
 import { useWorkspaceStore } from '@/stores/workspaceStateStore'
+
+// 导入执行存储和扩展存储的钩子
 import { useExecutionStore } from '@/stores/executionStore'
-import { IWidget } from '@comfyorg/litegraph'
 import { useExtensionStore } from '@/stores/extensionStore'
+
+// 导入键绑定实现和键绑定存储的钩子
 import { KeyComboImpl, useKeybindingStore } from '@/stores/keybindingStore'
+
+// 导入命令存储的钩子
 import { useCommandStore } from '@/stores/commandStore'
+
+// 导入响应式对象创建工具，用于创建响应式对象
 import { shallowReactive } from 'vue'
 
+// 定义动画预览组件的标识符
 export const ANIM_PREVIEW_WIDGET = '$$comfy_animation_preview'
 
+/**
+ * 清理节点名称中的特殊字符，以防止潜在的XSS攻击
+ * @param {string} string 需要清理的节点名称字符串
+ * @returns {string} 清理后的节点名称字符串
+ */
 function sanitizeNodeName(string) {
+  // 定义特殊字符映射，将特殊字符映射为空字符串以移除它们
   let entityMap = {
     '&': '',
     '<': '',
@@ -70,154 +131,331 @@ function sanitizeNodeName(string) {
     '`': '',
     '=': ''
   }
+  // 使用正则表达式替换所有特殊字符为空字符串
   return String(string).replace(/[&<>"'`=]/g, function fromEntityMap(s) {
     return entityMap[s]
   })
 }
 
+// 定义Clipspace类型，用于描述动画剪辑空间的数据结构
 type Clipspace = {
+  // 定义widgets属性，它是一个对象数组，每个对象代表一个动画预览组件
   widgets?: { type?: string; name?: string; value?: any }[] | null
+  // 定义imgs属性，它是一个HTMLImageElement数组，用于存储处理后的图像元素
   imgs?: HTMLImageElement[] | null
+  // 定义original_imgs属性，它是一个HTMLImageElement数组，用于存储原始的图像元素
   original_imgs?: HTMLImageElement[] | null
+  // 定义images属性，它是一个任意类型的数组，用于存储与图像相关的数据
   images?: any[] | null
+  // 定义selectedIndex属性，它是一个数字，用于指示当前选中的索引
   selectedIndex: number
+  // 定义img_paste_mode属性，它是一个字符串，用于指示图像粘贴模式
   img_paste_mode: string
 }
 
 /**
+ *
  * @typedef {import("types/comfy").ComfyExtension} ComfyExtension
  */
-
 export class ComfyApp {
   /**
-   * List of entries to queue
+   * 待处理条目队列
    * @type {{number: number, batchCount: number}[]}
    */
   #queueItems = []
   /**
-   * If the queue is currently being processed
+   * 队列是否正在处理中
    * @type {boolean}
    */
   #processingQueue = false
 
   /**
-   * Content Clipboard
+   * 内容剪贴板
    * @type {serialized node object}
    */
   static clipspace: Clipspace | null = null
+  /**
+   * 剪贴板失效处理函数
+   * @type {(() => void) | null}
+   */
   static clipspace_invalidate_handler: (() => void) | null = null
+  /**
+   * 打开遮罩编辑器的函数
+   * @type {null}
+   */
   static open_maskeditor = null
+  /**
+   * 从剪贴板返回节点的函数
+   * @type {null}
+   */
   static clipspace_return_node = null
 
-  // Force vite to import utils.ts as part of index.
-  // Force import of DraggableList.
+  // 强制vite将utils.ts作为index的一部分导入。
+  // 强制导入DraggableList。
   static utils = {
     applyTextReplacements,
     addStylesheet,
     DraggableList
   }
 
+  /**
+   * Vue应用是否已准备就绪
+   * @type {boolean}
+   */
   vueAppReady: boolean
+  /**
+   * 用户界面实例
+   * @type {ComfyUI}
+   */
   ui: ComfyUI
+  /**
+   * 日志记录实例
+   * @type {ComfyLogging}
+   */
   logging: ComfyLogging
+  /**
+   * 扩展列表
+   * @type {ComfyExtension[]}
+   */
   extensions: ComfyExtension[]
+  /**
+   * 扩展管理器实例
+   * @type {ExtensionManager}
+   */
   extensionManager: ExtensionManager
+  /**
+   * 节点输出记录
+   * @type {Record<string, any>}
+   */
   _nodeOutputs: Record<string, any>
+  /**
+   * 节点预览图片记录
+   * @type {Record<string, typeof Image>}
+   */
   nodePreviewImages: Record<string, typeof Image>
+  /**
+   * 图表实例
+   * @type {LGraph}
+   */
   graph: LGraph
+  /**
+   * 是否启用工作流视图恢复功能
+   * @type {any}
+   */
   enableWorkflowViewRestore: any
+  /**
+   * 画布实例
+   * @type {LGraphCanvas}
+   */
   canvas: LGraphCanvas
+  /**
+   * 当前拖拽的节点
+   * @type {LGraphNode | null}
+   */
   dragOverNode: LGraphNode | null
+  /**
+   * 画布元素
+   * @type {HTMLCanvasElement}
+   */
   canvasEl: HTMLCanvasElement
-  // x, y, scale
+  /**
+   * 缩放拖拽起始点
+   * @type {[number, number, number] | null}
+   */
   zoom_drag_start: [number, number, number] | null
+  /**
+   * 最近的节点错误记录
+   * @type {any[] | null}
+   */
   lastNodeErrors: any[] | null
+  /**
+   * 最近的执行错误记录
+   * @type {{ node_id: number } | null}
+   */
   lastExecutionError: { node_id: number } | null
+  /**
+   * 进度信息
+   * @type {{ value: number; max: number } | null}
+   */
   progress: { value: number; max: number } | null
+  /**
+   * 是否正在配置图表
+   * @type {boolean}
+   */
   configuringGraph: boolean
+  /**
+   * 是否为新用户会话
+   * @type {boolean}
+   */
   isNewUserSession: boolean
+  /**
+   * 存储位置
+   * @type {StorageLocation}
+   */
   storageLocation: StorageLocation
+  /**
+   * 是否为多用户服务器环境
+   * @type {boolean}
+   */
   multiUserServer: boolean
+  /**
+   * 画布渲染上下文
+   * @type {CanvasRenderingContext2D}
+   */
   ctx: CanvasRenderingContext2D
+  /**
+   * 小部件构造器记录
+   * @type {Record<string, ComfyWidgetConstructor>}
+   */
   widgets: Record<string, ComfyWidgetConstructor>
+  /**
+   * 工作流管理器实例
+   * @type {ComfyWorkflowManager}
+   */
   workflowManager: ComfyWorkflowManager
+  /**
+   * 顶部容器元素
+   * @type {HTMLElement}
+   */
   bodyTop: HTMLElement
+  /**
+   * 左侧容器元素
+   * @type {HTMLElement}
+   */
   bodyLeft: HTMLElement
+  /**
+   * 右侧容器元素
+   * @type {HTMLElement}
+   */
   bodyRight: HTMLElement
+  /**
+   * 底部容器元素
+   * @type {HTMLElement}
+   */
   bodyBottom: HTMLElement
+  /**
+   * 画布容器元素
+   * @type {HTMLElement}
+   */
   canvasContainer: HTMLElement
+  /**
+   * 菜单实例
+   * @type {ComfyAppMenu}
+   */
   menu: ComfyAppMenu
+  /**
+   * 绕过背景色
+   * @type {string}
+   */
   bypassBgColor: string
-  // Set by Comfy.Clipspace extension
+  /**
+   * 打开Clipspace的函数，由Comfy.Clipspace扩展设置
+   * @type {() => void}
+   */
   openClipspace: () => void = () => {}
 
   /**
-   * @deprecated Use useExecutionStore().executingNodeId instead
+   * @deprecated 使用 useExecutionStore().executingNodeId 替代
    */
   get runningNodeId(): string | null {
     return useExecutionStore().executingNodeId
   }
 
   /**
-   * @deprecated Use useWorkspaceStore().shiftDown instead
+   * @deprecated 使用 useWorkspaceStore().shiftDown 替代
    */
   get shiftDown(): boolean {
     return useWorkspaceStore().shiftDown
   }
 
+  /**
+   * ComfyUIApp 构造函数
+   * 初始化 UI 组件、日志记录器、工作流管理器等
+   */
   constructor() {
+    // 初始化 Vue 应用状态
     this.vueAppReady = false
+    // 初始化 UI 组件
     this.ui = new ComfyUI(this)
+    // 初始化日志记录器
     this.logging = new ComfyLogging(this)
+    // 初始化工作流管理器
     this.workflowManager = new ComfyWorkflowManager(this)
+    // 创建并添加顶部容器元素到 body
     this.bodyTop = $el('div.comfyui-body-top', { parent: document.body })
+    // 创建并添加左侧容器元素到 body
     this.bodyLeft = $el('div.comfyui-body-left', { parent: document.body })
+    // 创建并添加右侧容器元素到 body
     this.bodyRight = $el('div.comfyui-body-right', { parent: document.body })
+    // 创建并添加底部容器元素到 body
     this.bodyBottom = $el('div.comfyui-body-bottom', { parent: document.body })
+    // 创建并添加画布容器元素到 body
     this.canvasContainer = $el('div.graph-canvas-container', {
       parent: document.body
     })
+    // 初始化应用菜单
     this.menu = new ComfyAppMenu(this)
+    // 设置绕行背景颜色
     this.bypassBgColor = '#FF00FF'
 
     /**
-     * List of extensions that are registered with the app
+     * 注册到应用的扩展列表
      * @type {ComfyExtension[]}
      */
     this.extensions = []
 
     /**
-     * Stores the execution output data for each node
+     * 存储每个节点的执行输出数据
      * @type {Record<string, any>}
      */
     this.nodeOutputs = {}
 
     /**
-     * Stores the preview image data for each node
+     * 存储每个节点的预览图像数据
      * @type {Record<string, Image>}
      */
     this.nodePreviewImages = {}
   }
-
+  /**
+   * 获取节点输出的属性
+   * @returns {any} 返回节点输出的值
+   */
   get nodeOutputs() {
     return this._nodeOutputs
   }
 
+  /**
+   * 设置节点输出的属性
+   * @param {any} value 要设置的节点输出的值
+   */
   set nodeOutputs(value) {
     this._nodeOutputs = value
     this.#invokeExtensions('onNodeOutputsUpdated', value)
   }
 
+  /**
+   * 获取预览格式的参数
+   * @returns {string} 返回预览格式的参数字符串，如果没有设置则返回空字符串
+   */
   getPreviewFormatParam() {
     let preview_format = this.ui.settings.getSettingValue('Comfy.PreviewFormat')
     if (preview_format) return `&preview=${preview_format}`
     else return ''
   }
 
+  /**
+   * 获取随机参数
+   * @returns {string} 返回一个带有随机数的参数字符串
+   */
   getRandParam() {
     return '&rand=' + Math.random()
   }
 
+  /**
+   * 检查节点是否为图像节点
+   * @param {any} node 要检查的节点
+   * @returns {boolean} 如果节点是图像节点则返回true，否则返回false
+   */
   static isImageNode(node) {
     return (
       node.imgs ||
@@ -227,16 +465,28 @@ export class ComfyApp {
     )
   }
 
+  /**
+   * 在Clipspace编辑器保存时调用
+   * 如果存在返回节点，则从Clipspace粘贴到应用程序中
+   */
   static onClipspaceEditorSave() {
     if (ComfyApp.clipspace_return_node) {
       ComfyApp.pasteFromClipspace(ComfyApp.clipspace_return_node)
     }
   }
 
+  /**
+   * 在Clipspace编辑器关闭时调用
+   * 重置Clipspace返回节点
+   */
   static onClipspaceEditorClosed() {
     ComfyApp.clipspace_return_node = null
   }
 
+  /**
+   * 将节点复制到Clipspace
+   * @param {any} node 要复制的节点
+   */
   static copyToClipspace(node) {
     var widgets = null
     if (node.widgets) {
@@ -281,6 +531,10 @@ export class ComfyApp {
     }
   }
 
+  /**
+   * 从Clipspace粘贴节点数据到指定节点
+   * @param {any} node 要粘贴数据到的节点
+   */
   static pasteFromClipspace(node) {
     if (ComfyApp.clipspace) {
       // image paste
@@ -371,7 +625,13 @@ export class ComfyApp {
       app.graph.setDirtyCanvas(true)
     }
   }
+  // 中文注释
 
+  /**
+   * 获取启用的扩展
+   * 如果 Vue 应用未准备好，直接返回所有扩展
+   * 否则，从扩展存储中返回启用的扩展
+   */
   get enabledExtensions() {
     if (!this.vueAppReady) {
       return this.extensions
@@ -380,9 +640,9 @@ export class ComfyApp {
   }
 
   /**
-   * Invoke an extension callback
-   * @param {keyof ComfyExtension} method The extension callback to execute
-   * @param  {any[]} args Any arguments to pass to the callback
+   * 调用扩展回调
+   * @param {keyof ComfyExtension} method 要执行的扩展回调方法
+   * @param  {any[]} args 要传递给回调的参数
    * @returns
    */
   #invokeExtensions(method, ...args) {
@@ -405,10 +665,10 @@ export class ComfyApp {
   }
 
   /**
-   * Invoke an async extension callback
-   * Each callback will be invoked concurrently
-   * @param {string} method The extension callback to execute
-   * @param  {...any} args Any arguments to pass to the callback
+   * 调用异步扩展回调
+   * 每个回调将并行调用
+   * @param {string} method 要执行的扩展回调方法
+   * @param  {...any} args 要传递给回调的参数
    * @returns
    */
   async #invokeExtensionsAsync(method, ...args) {
@@ -430,13 +690,17 @@ export class ComfyApp {
     )
   }
 
+  /**
+   * 添加恢复工作流视图的功能
+   * 修改 LGraph 的序列化过程，以在启用相应设置时包含视图状态信息
+   */
   #addRestoreWorkflowView() {
     const serialize = LGraph.prototype.serialize
     const self = this
     LGraph.prototype.serialize = function () {
       const workflow = serialize.apply(this, arguments)
 
-      // Store the drag & scale info in the serialized workflow if the setting is enabled
+      // 如果启用了保存和恢复视图状态的设置，则在序列化的工作流中存储拖动和缩放信息
       if (self.enableWorkflowViewRestore.value) {
         if (!workflow.extra) {
           workflow.extra = {}
@@ -446,7 +710,7 @@ export class ComfyApp {
           offset: self.canvas.ds.offset
         }
       } else if (workflow.extra?.ds) {
-        // Clear any old view data
+        // 清除旧的视图数据
         delete workflow.extra.ds
       }
 
@@ -460,13 +724,16 @@ export class ComfyApp {
       defaultValue: true
     })
   }
-
   /**
-   * Adds special context menu handling for nodes
-   * e.g. this adds Open Image functionality for nodes that show images
-   * @param {*} node The node to add the menu handler
+   * 为节点添加上下文菜单处理器。
+   * @param {Object} node - 要添加菜单处理器的节点。
    */
   #addNodeContextMenuHandler(node) {
+    /**
+     * 生成复制图片的选项，如果支持的话。
+     * @param {HTMLImageElement} img - 要复制的图片。
+     * @returns {Array} 包含复制图片选项的数组，如果不支持则为空数组。
+     */
     function getCopyImageOption(img) {
       if (typeof window.ClipboardItem === 'undefined') return []
       return [
@@ -490,7 +757,7 @@ export class ComfyApp {
               try {
                 await writeImage(blob)
               } catch (error) {
-                // Chrome seems to only support PNG on write, convert and try again
+                // Chrome 只支持 PNG 格式的图片，如果图片不是 PNG 格式，则转换后重试
                 if (blob.type !== 'image/png') {
                   const canvas = $el('canvas', {
                     width: img.naturalWidth,
@@ -536,13 +803,13 @@ export class ComfyApp {
 
     node.prototype.getExtraMenuOptions = function (_, options) {
       if (this.imgs) {
-        // If this node has images then we add an open in new tab item
+        // 如果节点包含图片，则添加“在新标签页中打开”选项
         let img
         if (this.imageIndex != null) {
-          // An image is selected so select that
+          // 如果有选中的图片，则选择该图片
           img = this.imgs[this.imageIndex]
         } else if (this.overIndex != null) {
-          // No image is selected but one is hovered
+          // 没有选中的图片，但有悬停的图片
           img = this.imgs[this.overIndex]
         }
         if (img) {
@@ -585,7 +852,7 @@ export class ComfyApp {
         }
       })
 
-      // prevent conflict of clipspace content
+      // 防止与剪贴板内容冲突
       if (!ComfyApp.clipspace_return_node) {
         options.push({
           content: 'Copy (Clipspace)',
@@ -617,6 +884,10 @@ export class ComfyApp {
     }
   }
 
+  /**
+   * 为节点添加键盘事件处理器。
+   * @param {Object} node - 要添加键盘事件处理器的节点。
+   */
   #addNodeKeyHandler(node) {
     const app = this
     const origNodeOnKeyDown = node.prototype.onKeyDown
@@ -658,13 +929,17 @@ export class ComfyApp {
   }
 
   /**
-   * Adds Custom drawing logic for nodes
-   * e.g. Draws images and handles thumbnail navigation on nodes that output images
-   * @param {*} node The node to add the draw handler
+   * 为节点添加自定义绘制逻辑
+   * 例如：绘制图像并在输出图像的节点上处理缩略图导航
+   * @param {*} node 要添加绘制处理器的节点
    */
   #addDrawBackgroundHandler(node) {
     const app = this
-
+    /**
+     * 获取节点图像的顶部偏移量
+     * @param {*} node 节点
+     * @returns {number} 图像顶部偏移量
+     */
     function getImageTop(node) {
       let shiftY
       if (node.imageOffset != null) {
@@ -686,7 +961,10 @@ export class ComfyApp {
       }
       return shiftY
     }
-
+    /**
+     * 根据图像调整节点大小
+     * @param {boolean} force 是否强制调整大小
+     */
     node.prototype.setSizeForImage = function (force) {
       if (!force && this.animatedImages) return
 
@@ -699,7 +977,10 @@ export class ComfyApp {
         this.setSize([this.size[0], minHeight])
       }
     }
-
+    /**
+     * 绘制背景
+     * @param {CanvasRenderingContext2D} ctx 绘制上下文
+     */
     function unsafeDrawBackground(ctx) {
       if (!this.flags.collapsed) {
         let imgURLs = []
@@ -759,7 +1040,11 @@ export class ComfyApp {
             this.imgs = null
           }
         }
-
+        /**
+         * 检查所有图像是否具有相同的宽高比
+         * @param {HTMLImageElement[]} imgs 图像数组
+         * @returns {boolean} 是否所有图像具有相同的宽高比
+         */
         const is_all_same_aspect_ratio = (imgs) => {
           // assume: imgs.length >= 2
           let ratio = imgs[0].naturalWidth / imgs[0].naturalHeight
@@ -1024,30 +1309,30 @@ export class ComfyApp {
   }
 
   /**
-   * Adds a handler allowing drag+drop of files onto the window to load workflows
+   * 添加一个处理器，允许通过拖放文件到窗口来加载工作流
    */
   #addDropHandler() {
-    // Get prompt from dropped PNG or json
+    // 从拖放的 PNG 或 JSON 文件中获取提示
     document.addEventListener('drop', async (event) => {
       event.preventDefault()
       event.stopPropagation()
 
       const n = this.dragOverNode
       this.dragOverNode = null
-      // Node handles file drop, we dont use the built in onDropFile handler as its buggy
-      // If you drag multiple files it will call it multiple times with the same file
-      // @ts-expect-error This is not a standard event. TODO fix it.
+      // 节点处理文件拖放，不使用内置的 onDropFile 处理器，因为它是有 bug 的
+      // 如果拖动多个文件，它会多次调用同一个文件
+      // @ts-expect-error 这不是一个标准事件。TODO 修复它。
       if (n && n.onDragDrop && (await n.onDragDrop(event))) {
         return
       }
-      // Dragging from Chrome->Firefox there is a file but its a bmp, so ignore that
+      // 从 Chrome 拖动到 Firefox 时，文件可能是 bmp，忽略这种情况
       if (
         event.dataTransfer.files.length &&
         event.dataTransfer.files[0].type !== 'image/bmp'
       ) {
         await this.handleFile(event.dataTransfer.files[0])
       } else {
-        // Try loading the first URI in the transfer list
+        // 尝试加载传输列表中的第一个 URI
         const validTypes = ['text/uri-list', 'text/x-moz-url']
         const match = [...event.dataTransfer.types].find((t) =>
           validTypes.find((v) => t === v)
@@ -1061,7 +1346,7 @@ export class ComfyApp {
       }
     })
 
-    // Always clear over node on drag leave
+    // 在拖动离开时始终清除悬停节点
     this.canvasEl.addEventListener('dragleave', async () => {
       if (this.dragOverNode) {
         this.dragOverNode = null
@@ -1069,19 +1354,19 @@ export class ComfyApp {
       }
     })
 
-    // Add handler for dropping onto a specific node
+    // 添加在特定节点上拖放的处理器
     this.canvasEl.addEventListener(
       'dragover',
       (e) => {
         this.canvas.adjustMouseEvent(e)
-        // @ts-expect-error: canvasX and canvasY are added by adjustMouseEvent in litegraph
+        // @ts-expect-error: canvasX 和 canvasY 是由 litegraph 中的 adjustMouseEvent 添加的
         const node = this.graph.getNodeOnPos(e.canvasX, e.canvasY)
         if (node) {
-          // @ts-expect-error This is not a standard event. TODO fix it.
+          // @ts-expect-error 这不是一个标准事件。TODO 修复它。
           if (node.onDragOver && node.onDragOver(e)) {
             this.dragOverNode = node
 
-            // dragover event is fired very frequently, run this on an animation frame
+            // dragover 事件非常频繁地触发，因此在动画帧中运行此操作
             requestAnimationFrame(() => {
               this.graph.setDirtyCanvas(false, true)
             })
@@ -2230,6 +2515,14 @@ export class ComfyApp {
     }
   }
 
+  /**
+   * 加载图形数据。
+   * @param graphData - 要加载的图形数据，默认为 undefined。
+   * @param clean - 是否清理现有图形，默认为 true。
+   * @param restore_view - 是否恢复视图状态，默认为 true。
+   * @param workflow - 当前工作流，默认为 null。
+   * @param options - 配置选项，包括是否显示缺失节点和模型的对话框。
+   */
   async loadGraphData(
     graphData?: ComfyWorkflowJSON,
     clean: boolean = true,
@@ -2260,15 +2553,15 @@ export class ComfyApp {
     }
 
     if (useSettingStore().get('Comfy.Validation.Workflows')) {
-      // TODO: Show validation error in a dialog.
+      // TODO: 在对话框中显示验证错误。
       const validatedGraphData = await validateComfyWorkflow(
         graphData,
-        /* onError=*/ (err) => {
+        (err) => {
           useToastStore().addAlert(err)
         }
       )
-      // If the validation failed, use the original graph data.
-      // Ideally we should not block users from loading the workflow.
+      // 如果验证失败，使用原始图形数据。
+      // 理想情况下，我们不应该阻止用户加载工作流。
       graphData = validatedGraphData ?? graphData
     }
 
@@ -2280,19 +2573,21 @@ export class ComfyApp {
       missingNodeTypes
       // TODO: missingModels
     )
-    for (let n of graphData.nodes) {
-      // Patch T2IAdapterLoader to ControlNetLoader since they are the same node now
-      if (n.type == 'T2IAdapterLoader') n.type = 'ControlNetLoader'
-      if (n.type == 'ConditioningAverage ') n.type = 'ConditioningAverage' //typo fix
-      if (n.type == 'SDV_img2vid_Conditioning')
-        n.type = 'SVD_img2vid_Conditioning' //typo fix
 
-      // Find missing node types
+    for (let n of graphData.nodes) {
+      // 修复 T2IAdapterLoader 到 ControlNetLoader，因为它们现在是同一个节点
+      if (n.type == 'T2IAdapterLoader') n.type = 'ControlNetLoader'
+      if (n.type == 'ConditioningAverage ') n.type = 'ConditioningAverage' // 修复拼写错误
+      if (n.type == 'SDV_img2vid_Conditioning')
+        n.type = 'SVD_img2vid_Conditioning' // 修复拼写错误
+
+      // 查找缺失的节点类型
       if (!(n.type in LiteGraph.registered_node_types)) {
         missingNodeTypes.push(n.type)
         n.type = sanitizeNodeName(n.type)
       }
     }
+
     if (
       graphData.models &&
       useSettingStore().get('Comfy.Workflow.ShowMissingModelsWarning')
@@ -2319,7 +2614,7 @@ export class ComfyApp {
         graphData.extra?.ds
       ) {
         // @ts-expect-error
-        // Need to set strict: true for zod to match the type [number, number]
+        // 需要设置 strict: true 以匹配类型 [number, number]
         // https://github.com/colinhacks/zod/issues/3056
         this.canvas.ds.offset = graphData.extra.ds.offset
         this.canvas.ds.scale = graphData.extra.ds.scale
@@ -2328,11 +2623,11 @@ export class ComfyApp {
       try {
         this.workflowManager.activeWorkflow?.track()
       } catch (error) {
-        // TODO: Do we want silently fail here?
+        // TODO: 是否在这里静默失败？
       }
     } catch (error) {
       let errorHint = []
-      // Try extracting filename to see if it was caused by an extension script
+      // 尝试提取文件名以查看是否是由扩展脚本引起的
       const filename =
         error.fileName ||
         (error.stack || '').match(/(\/extensions\/.*\.js)/)?.[1]
@@ -2340,7 +2635,7 @@ export class ComfyApp {
       if (pos > -1) {
         errorHint.push(
           $el('span', {
-            textContent: 'This may be due to the following script:'
+            textContent: '这可能是由于以下脚本引起的问题:'
           }),
           $el('br'),
           $el('span', {
@@ -2352,11 +2647,11 @@ export class ComfyApp {
         )
       }
 
-      // Show dialog to let the user know something went wrong loading the data
+      // 显示对话框，告知用户加载数据时出现问题
       this.ui.dialog.show(
         $el('div', [
           $el('p', {
-            textContent: 'Loading aborted due to error reloading workflow data'
+            textContent: '由于重新加载工作流数据时出现错误，加载已中止'
           }),
           $el('pre', {
             style: { padding: '5px', backgroundColor: 'rgba(255,0,0,0.2)' },
@@ -2371,7 +2666,7 @@ export class ComfyApp {
               overflow: 'auto',
               backgroundColor: 'rgba(0,0,0,0.2)'
             },
-            textContent: error.stack || 'No stacktrace available'
+            textContent: error.stack || '没有可用的堆栈跟踪'
           }),
           ...errorHint
         ]).outerHTML
@@ -2379,14 +2674,14 @@ export class ComfyApp {
 
       return
     }
+
     for (const node of this.graph.nodes) {
       const size = node.computeSize()
       size[0] = Math.max(node.size[0], size[0])
       size[1] = Math.max(node.size[1], size[1])
       node.size = size
       if (node.widgets) {
-        // If you break something in the backend and want to patch workflows in the frontend
-        // This is the place to do this
+        // 如果后端出现问题并希望在前端修补工作流，这是可以做的地方
         for (let widget of node.widgets) {
           if (node.type == 'KSampler' || node.type == 'KSamplerAdvanced') {
             if (widget.name == 'sampler_name') {
@@ -2405,10 +2700,10 @@ export class ComfyApp {
           ) {
             if (widget.name == 'control_after_generate') {
               if (widget.value === true) {
-                // @ts-expect-error change widget type from boolean to string
+                // @ts-expect-error 将小部件类型从布尔值更改为字符串
                 widget.value = 'randomize'
               } else if (widget.value === false) {
-                // @ts-expect-error change widget type from boolean to string
+                // @ts-expect-error 将小部件类型从布尔值更改为字符串
                 widget.value = 'fixed'
               }
             }
@@ -2429,7 +2724,7 @@ export class ComfyApp {
       this.#invokeExtensions('loadedGraphNode', node)
     }
 
-    // TODO: Properly handle if both nodes and models are missing (sequential dialogs?)
+    // TODO: 正确处理同时缺少节点和模型的情况（连续对话框？）
     if (missingNodeTypes.length && showMissingNodesDialog) {
       this.#showMissingNodesError(missingNodeTypes)
     }
@@ -2444,36 +2739,41 @@ export class ComfyApp {
   }
 
   /**
-   * Serializes a graph using preferred user settings.
-   * @param graph The litegraph to serialize.
-   * @returns A serialized graph (aka workflow) with preferred user settings.
+   * 使用用户首选设置序列化图形。
+   * @param graph - 要序列化的 LiteGraph，默认为当前图形。
+   * @returns 序列化后的图形（即工作流），包含用户首选设置。
    */
   serializeGraph(graph: LGraph = this.graph) {
+    // 获取用户设置中的节点排序选项
     const sortNodes = useSettingStore().get('Comfy.Workflow.SortNodeIdOnSave')
+    // 序列化图形，并根据用户设置决定是否排序节点
     return graph.serialize({ sortNodes })
   }
 
   /**
-   * Converts the current graph workflow for sending to the API.
-   * Note: Node widgets are updated before serialization to prepare queueing.
-   * @returns The workflow and node links
+   * 将当前图形工作流转换为发送到 API 的格式。
+   * 注意：节点小部件在序列化之前更新，以准备排队。
+   * @param graph - 要转换的图形，默认为当前图形。
+   * @param clean - 是否清理已删除节点的输入，默认为 true。
+   * @returns 包含工作流和节点链接的对象。
    */
   async graphToPrompt(graph = this.graph, clean = true) {
+    // 计算执行顺序并更新节点小部件
     for (const outerNode of this.graph.computeExecutionOrder(false)) {
       if (outerNode.widgets) {
         for (const widget of outerNode.widgets) {
-          // Allow widgets to run callbacks before a prompt has been queued
-          // e.g. random seed before every gen
+          // 允许小部件在排队前运行回调，例如每次生成前的随机种子
           widget.beforeQueued?.()
         }
       }
 
+      // 获取内部节点
       const innerNodes = outerNode['getInnerNodes']
         ? outerNode['getInnerNodes']()
         : [outerNode]
       for (const node of innerNodes) {
         if (node.isVirtualNode) {
-          // Don't serialize frontend only nodes but let them make changes
+          // 不序列化仅前端节点，但允许它们进行更改
           if (node.applyToGraph) {
             node.applyToGraph()
           }
@@ -2481,9 +2781,11 @@ export class ComfyApp {
       }
     }
 
+    // 序列化图形
     const workflow = this.serializeGraph(graph)
     const output = {}
-    // Process nodes in order of execution
+
+    // 按执行顺序处理节点
     for (const outerNode of graph.computeExecutionOrder(false)) {
       const skipNode = outerNode.mode === 2 || outerNode.mode === 4
       const innerNodes =
@@ -2496,14 +2798,14 @@ export class ComfyApp {
         }
 
         if (node.mode === 2 || node.mode === 4) {
-          // Don't serialize muted nodes
+          // 不序列化静音节点
           continue
         }
 
         const inputs = {}
         const widgets = node.widgets
 
-        // Store all widget values
+        // 存储所有小部件值
         if (widgets) {
           for (const i in widgets) {
             const widget = widgets[i]
@@ -2515,7 +2817,7 @@ export class ComfyApp {
           }
         }
 
-        // Store all node links
+        // 存储所有节点链接
         for (let i in node.inputs) {
           let parent = node.getInputNode(i)
           if (parent) {
@@ -2575,7 +2877,7 @@ export class ComfyApp {
         }
 
         if (this.ui.settings.getSettingValue('Comfy.DevMode')) {
-          // Ignored by the backend.
+          // 后端忽略
           node_data['_meta'] = {
             title: node.title
           }
@@ -2585,7 +2887,7 @@ export class ComfyApp {
       }
     }
 
-    // Remove inputs connected to removed nodes
+    // 清理已删除节点的输入
     if (clean) {
       for (const o in output) {
         for (const i in output[o].inputs) {
@@ -2630,10 +2932,15 @@ export class ComfyApp {
     return '(unknown error)'
   }
 
+  /**
+   * 将提示加入队列并处理。
+   * @param number - 提示编号。
+   * @param batchCount - 批次数量，默认为 1。
+   */
   async queuePrompt(number, batchCount = 1) {
     this.#queueItems.push({ number, batchCount })
 
-    // Only have one action process the items so each one gets a unique seed correctly
+    // 只有一个动作处理队列项，以确保每个项都有一个唯一的种子
     if (this.#processingQueue) {
       return
     }
@@ -2643,7 +2950,7 @@ export class ComfyApp {
 
     try {
       while (this.#queueItems.length) {
-        ;({ number, batchCount } = this.#queueItems.pop())
+        const { number, batchCount } = this.#queueItems.pop()
 
         for (let i = 0; i < batchCount; i++) {
           const p = await this.graphToPrompt()
@@ -2675,8 +2982,8 @@ export class ComfyApp {
             const node = this.graph.getNodeById(n.id)
             if (node.widgets) {
               for (const widget of node.widgets) {
-                // Allow widgets to run callbacks after a prompt has been queued
-                // e.g. random seed after every gen
+                // 允许小部件在提示被加入队列后运行回调
+                // 例如，每次生成后随机种子
                 // @ts-expect-error
                 if (widget.afterQueued) {
                   // @ts-expect-error
@@ -2693,6 +3000,7 @@ export class ComfyApp {
     } finally {
       this.#processingQueue = false
     }
+
     api.dispatchEvent(
       new CustomEvent('promptQueued', { detail: { number, batchCount } })
     )
@@ -2708,10 +3016,11 @@ export class ComfyApp {
   }
 
   /**
-   * Loads workflow data from the specified file
-   * @param {File} file
+   * 从指定文件加载工作流数据。
+   * @param {File} file - 要处理的文件。
    */
   async handleFile(file) {
+    // 移除文件扩展名
     const removeExt = (f) => {
       if (!f) return f
       const p = f.lastIndexOf('.')
@@ -2719,6 +3028,8 @@ export class ComfyApp {
       return f.substring(0, p)
     }
     const fileName = removeExt(file.name)
+
+    // 处理 PNG 文件
     if (file.type === 'image/png') {
       const pngInfo = await getPngMetadata(file)
       if (pngInfo?.workflow) {
@@ -2737,9 +3048,11 @@ export class ComfyApp {
       } else {
         this.showErrorOnFileLoad(file)
       }
-    } else if (file.type === 'image/webp') {
+    }
+    // 处理 WebP 文件
+    else if (file.type === 'image/webp') {
       const pngInfo = await getWebpMetadata(file)
-      // Support loading workflows from that webp custom node.
+      // 支持从 WebP 自定义节点加载工作流
       const workflow = pngInfo?.workflow || pngInfo?.Workflow
       const prompt = pngInfo?.prompt || pngInfo?.Prompt
 
@@ -2750,7 +3063,9 @@ export class ComfyApp {
       } else {
         this.showErrorOnFileLoad(file)
       }
-    } else if (file.type === 'audio/flac' || file.type === 'audio/x-flac') {
+    }
+    // 处理 FLAC 文件
+    else if (file.type === 'audio/flac' || file.type === 'audio/x-flac') {
       const pngInfo = await getFlacMetadata(file)
       const workflow = pngInfo?.workflow || pngInfo?.Workflow
       const prompt = pngInfo?.prompt || pngInfo?.Prompt
@@ -2762,10 +3077,9 @@ export class ComfyApp {
       } else {
         this.showErrorOnFileLoad(file)
       }
-    } else if (
-      file.type === 'application/json' ||
-      file.name?.endsWith('.json')
-    ) {
+    }
+    // 处理 JSON 文件
+    else if (file.type === 'application/json' || file.name?.endsWith('.json')) {
       const reader = new FileReader()
       reader.onload = async () => {
         const readerResult = reader.result as string
@@ -2784,12 +3098,14 @@ export class ComfyApp {
         }
       }
       reader.readAsText(file)
-    } else if (
+    }
+    // 处理 .latent 和 .safetensors 文件
+    else if (
       file.name?.endsWith('.latent') ||
       file.name?.endsWith('.safetensors')
     ) {
       const info = await getLatentMetadata(file)
-      // TODO define schema to LatentMetadata
+      // TODO 定义 LatentMetadata 的模式
       // @ts-expect-error
       if (info.workflow) {
         await this.loadGraphData(
@@ -2806,7 +3122,9 @@ export class ComfyApp {
       } else {
         this.showErrorOnFileLoad(file)
       }
-    } else {
+    }
+    // 处理未知文件类型
+    else {
       this.showErrorOnFileLoad(file)
     }
   }
