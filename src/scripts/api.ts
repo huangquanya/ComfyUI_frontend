@@ -1,4 +1,6 @@
+// 导入 ComfyWorkflowJSON 类型，该类型定义了 ComfyUI 工作流的 JSON 结构
 import type { ComfyWorkflowJSON } from '@/types/comfyWorkflow'
+// 导入各种 API 响应类型，这些类型定义了从 API 返回的数据结构
 import {
   type DownloadModelStatus,
   type HistoryTaskItem,
@@ -14,42 +16,64 @@ import {
   type UserDataFullInfo,
   validateComfyNodeDef
 } from '@/types/apiTypes'
+// 导入 axios 库，用于发送 HTTP 请求
 import axios from 'axios'
 
+/**
+ * 定义一个接口，用于描述队列提示请求的主体。
+ */
 interface QueuePromptRequestBody {
+  // 客户端ID，用于标识请求的客户端。
   client_id: string
-  // Mapping from node id to node info + input values
-  // TODO: Type this.
+  // 从节点ID到节点信息和输入值的映射。
+  // TODO: 对此进行类型化。
   prompt: Record<number, any>
+  // 额外的数据，包含额外的png信息。
   extra_data: {
+    // 额外的png信息，包含工作流的JSON数据。
     extra_pnginfo: {
+      // 工作流的JSON数据。
       workflow: ComfyWorkflowJSON
     }
   }
+  // 是否将提示添加到队列的前面。
   front?: boolean
+  // 提示在队列中的位置。
   number?: number
 }
 
+/**
+ * 定义一个类，用于与ComfyUI的API进行交互。
+ */
 class ComfyApi extends EventTarget {
+  // 已注册的事件类型集合。
   #registered = new Set()
+  // API的主机地址。
   api_host: string
+  // API的基础路径。
   api_base: string
   /**
-   * The client id from the initial session storage.
+   * 从初始会话存储中获取的客户端ID。
    */
   initialClientId: string | null
   /**
-   * The current client id from websocket status updates.
+   * 从WebSocket状态更新中获取的当前客户端ID。
    */
   clientId?: string
+  // 用户标识。
   user: string
+  // WebSocket连接实例。
   socket: WebSocket | null = null
 
+  // 已报告的未知消息类型集合。
   reportedUnknownMessageTypes = new Set<string>()
 
+  /**
+   * 构造函数，初始化API主机和基础路径。
+   */
   constructor() {
     super()
-    // api.user is set by ComfyApp.setup()
+    // api.user 由 ComfyApp.setup() 设置。
     this.user = ''
     this.api_host = location.host
     this.api_base = location.pathname.split('/').slice(0, -1).join('/')
@@ -57,19 +81,40 @@ class ComfyApi extends EventTarget {
     this.initialClientId = sessionStorage.getItem('clientId')
   }
 
+  /**
+   * 获取内部URL。
+   * @param route - 路由路径。
+   * @returns 完整的内部URL。
+   */
   internalURL(route: string): string {
     return this.api_base + '/internal' + route
   }
 
+  /**
+   * 获取API URL。
+   * @param route - 路由路径。
+   * @returns 完整的API URL。
+   */
   apiURL(route: string): string {
     return this.api_base + '/api' + route
   }
 
+  /**
+   * 获取文件URL。
+   * @param route - 路由路径。
+   * @returns 完整的文件URL。
+   */
   fileURL(route: string): string {
     return this.api_base + route
   }
 
-  fetchApi(route: string, options?: RequestInit) {
+  /**
+   * 发送API请求。
+   * @param route - 路由路径。
+   * @param options - 请求选项。
+   * @returns 请求响应。
+   */
+  fetchApi(route: string, options?: RequestInit): Promise<Response> {
     if (!options) {
       options = {}
     }
@@ -90,17 +135,23 @@ class ComfyApi extends EventTarget {
     return fetch(this.apiURL(route), options)
   }
 
+  /**
+   * 添加事件监听器。
+   * @param type - 事件类型。
+   * @param callback - 事件回调函数。
+   * @param options - 事件监听器选项。
+   */
   addEventListener(
     type: string,
     callback: any,
     options?: AddEventListenerOptions
-  ) {
+  ): void {
     super.addEventListener(type, callback, options)
     this.#registered.add(type)
   }
 
   /**
-   * Poll status  for colab and other things that don't support websockets.
+   * 轮询状态以支持不支持 WebSocket 的 Colab 等。
    */
   #pollQueue() {
     setInterval(async () => {
@@ -115,8 +166,8 @@ class ComfyApi extends EventTarget {
   }
 
   /**
-   * Creates and connects a WebSocket for realtime updates
-   * @param {boolean} isReconnect If the socket is connection is a reconnect attempt
+   * 创建并连接一个 WebSocket 以获取实时更新
+   * @param {boolean} isReconnect 如果是重新连接尝试，则为 true
    */
   #createSocket(isReconnect?: boolean) {
     if (this.socket) {
@@ -196,8 +247,8 @@ class ComfyApi extends EventTarget {
               if (msg.data.sid) {
                 const clientId = msg.data.sid
                 this.clientId = clientId
-                window.name = clientId // use window name so it isnt reused when duplicating tabs
-                sessionStorage.setItem('clientId', clientId) // store in session storage so duplicate tab can load correct workflow
+                window.name = clientId // 使用窗口名称，这样在复制标签时就不会重用
+                sessionStorage.setItem('clientId', clientId) // 将其存储在会话存储中，以便复制的标签可以加载正确的工作流
               }
               this.dispatchEvent(
                 new CustomEvent('status', { detail: msg.data.status })
@@ -265,12 +316,21 @@ class ComfyApi extends EventTarget {
   /**
    * Initialises sockets and realtime updates
    */
+  /**
+   * 初始化方法
+   *
+   * 初始化时，会调用私有方法 `#createSocket()` 来创建socket连接。
+   */
   init() {
     this.#createSocket()
   }
 
   /**
-   * Gets a list of extension urls
+   * 获取扩展列表的URL
+   * 该方法用于通过网络请求异步获取扩展信息列表，以JSON格式返回。
+   * 请求 '/extensions' 端点，并避免使用缓存。
+   *
+   * @returns {Promise<ExtensionsResponse>} 返回一个解析后的扩展信息对象的Promise。
    */
   async getExtensions(): Promise<ExtensionsResponse> {
     const resp = await this.fetchApi('/extensions', { cache: 'no-store' })
@@ -278,48 +338,69 @@ class ComfyApi extends EventTarget {
   }
 
   /**
-   * Gets a list of embedding names
+   * 获取嵌入名称列表
+   * 此方法用于从API获取嵌入资源的名称列表。
+   * 该方法不接受任何参数。
+   *
+   * @returns {Promise<EmbeddingsResponse>} 返回一个Promise，解析后为包含嵌入名称列表的EmbeddingsResponse实例。
    */
   async getEmbeddings(): Promise<EmbeddingsResponse> {
+    // 调用fetchApi方法向'/embeddings' API端点发送请求，并设置请求不被缓存。
+    // 等待响应并将其转换为JSON格式。
     const resp = await this.fetchApi('/embeddings', { cache: 'no-store' })
+    // 返回解析后的JSON数据。
     return await resp.json()
   }
 
   /**
-   * Loads node object definitions for the graph
-   * @returns The node definitions
+   * 加载图的节点对象定义
+   * @param { { validate?: boolean } } options - 是否进行验证的选项，默认为 false
+   * @returns {Promise<Record<string, ComfyNodeDef>>} 节点定义
    */
   async getNodeDefs({ validate = false }: { validate?: boolean } = {}): Promise<
     Record<string, ComfyNodeDef>
   > {
+    // 从 API 获取节点定义信息
     const resp = await this.fetchApi('/object_info', { cache: 'no-store' })
+    // 解析 JSON 响应
     const objectInfoUnsafe = await resp.json()
+    // 如果不需要验证，直接返回原始信息
     if (!validate) {
       return objectInfoUnsafe
     }
-    // Validate node definitions against zod schema. (slow)
+    // 验证节点定义是否符合 zod 模式（较慢）
     const objectInfo: Record<string, ComfyNodeDef> = {}
+    // 遍历每个节点定义进行验证
     for (const key in objectInfoUnsafe) {
+      // 验证每个节点定义并处理错误
       const validatedDef = validateComfyNodeDef(
         objectInfoUnsafe[key],
         /* onError=*/ (errorMessage: string) => {
+          // 跳过无效的节点定义并记录警告信息
           console.warn(
-            `Skipping invalid node definition: ${key}. See debug log for more information.`
+            `跳过无效的节点定义: ${key}。请查看调试日志以获取更多信息。`
           )
+          // 在调试模式下记录详细的错误信息
           console.debug(errorMessage)
         }
       )
+      // 如果节点定义有效，将其添加到返回对象中
       if (validatedDef !== null) {
         objectInfo[key] = validatedDef
       }
     }
+    // 返回包含所有有效节点定义的对象
     return objectInfo
   }
 
   /**
+   * 异步将提示信息排队到指定位置。
    *
-   * @param {number} number The index at which to queue the prompt, passing -1 will insert the prompt at the front of the queue
-   * @param {object} prompt The prompt data to queue
+   * 此函数通过发送 POST 请求到 API 端点来排队一个提示对象。可以通过 `number` 参数指定排队的位置。
+   * 如果传递 `-1`，提示将被插入到队列的前面。提示数据包括输出对象和工作流信息。
+   *
+   * @param {number} number 提示排队的位置，传递 -1 将把提示插入到队列的前面
+   * @param {object} prompt 要排队的提示数据
    */
   async queuePrompt(
     number: number,
@@ -328,18 +409,22 @@ class ComfyApi extends EventTarget {
       workflow
     }: { output: Record<number, any>; workflow: ComfyWorkflowJSON }
   ): Promise<PromptResponse> {
+    // 构建请求体，包括客户端 ID、提示数据和额外的工作流信息
     const body: QueuePromptRequestBody = {
-      client_id: this.clientId ?? '', // TODO: Unify clientId access
+      client_id: this.clientId ?? '', // TODO: 统一客户端 ID 访问
       prompt: output,
       extra_data: { extra_pnginfo: { workflow } }
     }
 
+    // 如果 number 是 -1，设置 front 属性为 true，将提示排队到队列前面
     if (number === -1) {
       body.front = true
     } else if (number != 0) {
+      // 如果 number 不是 0，设置 number 属性，将提示排队到指定位置
       body.number = number
     }
 
+    // 发送 POST 请求到 API 端点以排队提示
     const res = await this.fetchApi('/prompt', {
       method: 'POST',
       headers: {
@@ -348,12 +433,14 @@ class ComfyApi extends EventTarget {
       body: JSON.stringify(body)
     })
 
+    // 如果响应状态码不是 200，抛出带有响应数据的错误
     if (res.status !== 200) {
       throw {
         response: await res.json()
       }
     }
 
+    // 返回解析后的 JSON 响应
     return await res.json()
   }
 

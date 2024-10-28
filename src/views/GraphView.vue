@@ -1,6 +1,6 @@
 <template>
-  <!-- Top menu bar needs to load before the GraphCanvas as it needs to host
-  the menu buttons added by legacy extension scripts.-->
+  <!-- 顶部菜单栏需要在 GraphCanvas 之前加载，因为它需要承载
+  由传统扩展脚本添加的菜单按钮。-->
   <TopMenubar />
   <GraphCanvas @ready="onGraphReady" />
   <GlobalToast />
@@ -38,15 +38,22 @@ import { useNodeBookmarkStore } from '@/stores/nodeBookmarkStore'
 import { useNodeDefStore, useNodeFrequencyStore } from '@/stores/nodeDefStore'
 import { useBottomPanelStore } from '@/stores/workspace/bottomPanelStore'
 
+// 初始化自动队列处理器
 setupAutoQueueHandler()
 
+// 获取国际化实例
 const { t } = useI18n()
+// 获取 Toast 实例
 const toast = useToast()
+// 获取设置存储实例
 const settingStore = useSettingStore()
+// 获取执行存储实例
 const executionStore = useExecutionStore()
 
+// 计算主题
 const theme = computed<string>(() => settingStore.get('Comfy.ColorPalette'))
 
+// 监视主题变化，更新 body 类名
 watch(
   theme,
   (newTheme) => {
@@ -61,6 +68,7 @@ watch(
   { immediate: true }
 )
 
+// 监视文本区域字体大小设置，更新样式
 watchEffect(() => {
   const fontSize = settingStore.get('Comfy.TextareaWidget.FontSize')
   document.documentElement.style.setProperty(
@@ -69,6 +77,7 @@ watchEffect(() => {
   )
 })
 
+// 监视树浏览器项目填充设置，更新样式
 watchEffect(() => {
   const padding = settingStore.get('Comfy.TreeExplorer.ItemPadding')
   document.documentElement.style.setProperty(
@@ -77,6 +86,7 @@ watchEffect(() => {
   )
 })
 
+// 监视区域设置，更新国际化语言
 watchEffect(() => {
   const locale = settingStore.get('Comfy.Locale')
   if (locale) {
@@ -84,6 +94,7 @@ watchEffect(() => {
   }
 })
 
+// 监视新菜单设置，更新菜单显示
 watchEffect(() => {
   const useNewMenu = settingStore.get('Comfy.UseNewMenu')
   if (useNewMenu === 'Disabled') {
@@ -94,6 +105,7 @@ watchEffect(() => {
   }
 })
 
+// 初始化函数
 const init = () => {
   settingStore.addSettings(app.ui.settings)
   useKeybindingStore().loadCoreKeybindings()
@@ -102,21 +114,26 @@ const init = () => {
   app.extensionManager = useWorkspaceStore()
 }
 
+// 获取队列待处理任务计数存储实例
 const queuePendingTaskCountStore = useQueuePendingTaskCountStore()
+// 处理状态事件
 const onStatus = (e: CustomEvent<StatusWsMessageStatus>) => {
   queuePendingTaskCountStore.update(e)
 }
 
+// 重连消息
 const reconnectingMessage: ToastMessageOptions = {
   severity: 'error',
   summary: t('reconnecting')
 }
 
+// 处理重连中事件
 const onReconnecting = () => {
   toast.remove(reconnectingMessage)
   toast.add(reconnectingMessage)
 }
 
+// 处理重连成功事件
 const onReconnected = () => {
   toast.remove(reconnectingMessage)
   toast.add({
@@ -126,12 +143,18 @@ const onReconnected = () => {
   })
 }
 
+// 获取工作流存储实例
 const workflowStore = useWorkflowStore()
+// 获取工作流书签存储实例
 const workflowBookmarkStore = useWorkflowBookmarkStore()
+// 绑定执行存储
 app.workflowManager.executionStore = executionStore
+// 绑定工作流存储
 app.workflowManager.workflowStore = workflowStore
+// 绑定工作流书签存储
 app.workflowManager.workflowBookmarkStore = workflowBookmarkStore
 
+// 挂载时初始化
 onMounted(() => {
   api.addEventListener('status', onStatus)
   api.addEventListener('reconnecting', onReconnecting)
@@ -145,6 +168,7 @@ onMounted(() => {
   }
 })
 
+// 卸载前清理
 onBeforeUnmount(() => {
   api.removeEventListener('status', onStatus)
   api.removeEventListener('reconnecting', onReconnecting)
@@ -152,22 +176,22 @@ onBeforeUnmount(() => {
   executionStore.unbindExecutionEvents()
 })
 
+// 处理 GraphCanvas 准备就绪事件
 const onGraphReady = () => {
   requestIdleCallback(
     () => {
-      // Setting values now available after comfyApp.setup.
-      // Load keybindings.
+      // 设置值现在在 comfyApp.setup 之后可用。
+      // 加载键绑定。
       useKeybindingStore().loadUserKeybindings()
 
-      // Migrate legacy bookmarks
+      // 迁移传统书签
       useNodeBookmarkStore().migrateLegacyBookmarks()
 
-      // Node defs now available after comfyApp.setup.
-      // Explicitly initialize nodeSearchService to avoid indexing delay when
-      // node search is triggered
+      // 节点定义现在在 comfyApp.setup 之后可用。
+      // 显式初始化 nodeSearchService 以避免在触发节点搜索时出现索引延迟
       useNodeDefStore().nodeSearchService.endsWithFilterStartSequence('')
 
-      // Non-blocking load of node frequencies
+      // 非阻塞加载节点频率
       useNodeFrequencyStore().loadNodeFrequencies()
     },
     { timeout: 1000 }
